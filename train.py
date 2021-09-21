@@ -59,6 +59,7 @@ class NN():
         labels = torch.argmin(dist, dim=1)
         return self.train_label[labels]
 
+
 class KNN(NN):
 
     def __init__(self, X=None, Y=None, k=3, p=2):
@@ -71,12 +72,9 @@ class KNN(NN):
             self.unique_labels = self.train_label.unique()
 
     def predict(self, x):
-
-
         dist = distance_matrix(x, self.train_pts, self.p) ** (1 / self.p)
 
         knn = dist.topk(self.k, largest=False)
-
 
         return knn
 
@@ -89,10 +87,11 @@ def copy_files(src, dst, ignores=[]):
             continue
         full_file_name = os.path.join(src, file_name)
         if os.path.isfile(full_file_name):
-            shutil.copy(full_file_name, os.path.join(dst,file_name))
+            shutil.copy(full_file_name, os.path.join(dst, file_name))
         if os.path.isdir(full_file_name):
             os.makedirs(os.path.join(dst, file_name), exist_ok=True)
             copy_files(full_file_name, os.path.join(dst, file_name), ignores)
+
 
 def prep_dirs(root):
     # make embeddings dir
@@ -105,8 +104,10 @@ def prep_dirs(root):
     # make source code record dir & copy
     source_code_save_path = os.path.join(root, 'src')
     os.makedirs(source_code_save_path, exist_ok=True)
-    copy_files('./', source_code_save_path, ['.git','.vscode','__pycache__','logs','README','samples','LICENSE']) # copy source code
+    copy_files('./', source_code_save_path,
+               ['.git', '.vscode', '__pycache__', 'logs', 'README', 'samples', 'LICENSE'])  # copy source code
     return embeddings_path, sample_path, source_code_save_path
+
 
 def embedding_concat(x, y):
     # from https://github.com/xiahaifeng1995/PaDiM-Anomaly-Detection-Localization-master
@@ -123,6 +124,7 @@ def embedding_concat(x, y):
 
     return z
 
+
 def reshape_embedding(embedding):
     embedding_list = []
     for k in range(embedding.shape[0]):
@@ -131,21 +133,21 @@ def reshape_embedding(embedding):
                 embedding_list.append(embedding[k, :, i, j])
     return embedding_list
 
-#imagenet
+
+# imagenet
 mean_train = [0.485, 0.456, 0.406]
 std_train = [0.229, 0.224, 0.225]
 
-class MVTecDataset(Dataset):
-    def __init__(self, root, transform, gt_transform, phase):
-        if phase=='train':
+
+class Retina(Dataset):
+    def __init__(self, root, transform, phase):
+        if phase == 'train':
             self.img_path = os.path.join(root, 'train')
         else:
             self.img_path = os.path.join(root, 'test')
-            self.gt_path = os.path.join(root, 'ground_truth')
         self.transform = transform
-        self.gt_transform = gt_transform
         # load dataset
-        self.img_paths, self.gt_paths, self.labels, self.types = self.load_dataset() # self.labels => good : 0, anomaly : 1
+        self.img_paths, self.gt_paths, self.labels, self.types = self.load_dataset()  # self.labels => good : 0, anomaly : 1
 
     def load_dataset(self):
 
@@ -155,14 +157,61 @@ class MVTecDataset(Dataset):
         tot_types = []
 
         defect_types = os.listdir(self.img_path)
-        
+
+        for defect_type in defect_types:
+            img_paths = glob.glob(os.path.join(self.img_path, defect_type) + "/*.jpeg")
+            img_tot_paths.extend(img_paths)
+            gt_tot_paths.extend([0] * len(img_paths))
+            tot_labels.extend([int(defect_type)] * len(img_paths))
+            tot_types.extend([defect_type] * len(img_paths))
+
+        assert len(img_tot_paths) == len(gt_tot_paths), "Something wrong with test and ground truth pair!"
+
+        return img_tot_paths, gt_tot_paths, tot_labels, tot_types
+
+    def __len__(self):
+        return len(self.img_paths)
+
+    def __getitem__(self, idx):
+        img_path, gt, label, img_type = self.img_paths[idx], self.gt_paths[idx], self.labels[idx], self.types[idx]
+        img = Image.open(img_path).convert('RGB')
+        img = self.transform(img)
+
+        gt = torch.zeros([1, img.size()[-2], img.size()[-2]])
+
+        assert img.size()[1:] == gt.size()[1:], "image.size != gt.size !!!"
+
+        return img, gt, label, os.path.basename(img_path[:-4]), img_type
+
+
+class MVTecDataset(Dataset):
+    def __init__(self, root, transform, gt_transform, phase):
+        if phase == 'train':
+            self.img_path = os.path.join(root, 'train')
+        else:
+            self.img_path = os.path.join(root, 'test')
+            self.gt_path = os.path.join(root, 'ground_truth')
+        self.transform = transform
+        self.gt_transform = gt_transform
+        # load dataset
+        self.img_paths, self.gt_paths, self.labels, self.types = self.load_dataset()  # self.labels => good : 0, anomaly : 1
+
+    def load_dataset(self):
+
+        img_tot_paths = []
+        gt_tot_paths = []
+        tot_labels = []
+        tot_types = []
+
+        defect_types = os.listdir(self.img_path)
+
         for defect_type in defect_types:
             if defect_type == 'good':
                 img_paths = glob.glob(os.path.join(self.img_path, defect_type) + "/*.png")
                 img_tot_paths.extend(img_paths)
-                gt_tot_paths.extend([0]*len(img_paths))
-                tot_labels.extend([0]*len(img_paths))
-                tot_types.extend(['good']*len(img_paths))
+                gt_tot_paths.extend([0] * len(img_paths))
+                tot_labels.extend([0] * len(img_paths))
+                tot_types.extend(['good'] * len(img_paths))
             else:
                 img_paths = glob.glob(os.path.join(self.img_path, defect_type) + "/*.png")
                 gt_paths = glob.glob(os.path.join(self.gt_path, defect_type) + "/*.png")
@@ -170,11 +219,11 @@ class MVTecDataset(Dataset):
                 gt_paths.sort()
                 img_tot_paths.extend(img_paths)
                 gt_tot_paths.extend(gt_paths)
-                tot_labels.extend([1]*len(img_paths))
-                tot_types.extend([defect_type]*len(img_paths))
+                tot_labels.extend([1] * len(img_paths))
+                tot_types.extend([defect_type] * len(img_paths))
 
         assert len(img_tot_paths) == len(gt_tot_paths), "Something wrong with test and ground truth pair!"
-        
+
         return img_tot_paths, gt_tot_paths, tot_labels, tot_types
 
     def __len__(self):
@@ -189,7 +238,7 @@ class MVTecDataset(Dataset):
         else:
             gt = Image.open(gt)
             gt = self.gt_transform(gt)
-        
+
         assert img.size()[1:] == gt.size()[1:], "image.size != gt.size !!!"
 
         return img, gt, label, os.path.basename(img_path[:-4]), img_type
@@ -199,16 +248,18 @@ def cvt2heatmap(gray):
     heatmap = cv2.applyColorMap(np.uint8(gray), cv2.COLORMAP_JET)
     return heatmap
 
+
 def heatmap_on_image(heatmap, image):
     if heatmap.shape != image.shape:
         heatmap = cv2.resize(heatmap, (image.shape[0], image.shape[1]))
-    out = np.float32(heatmap)/255 + np.float32(image)/255
+    out = np.float32(heatmap) / 255 + np.float32(image) / 255
     out = out / np.max(out)
     return np.uint8(255 * out)
 
+
 def min_max_norm(image):
     a_min, a_max = image.min(), image.max()
-    return (image-a_min)/(a_max - a_min)    
+    return (image - a_min) / (a_max - a_min)
 
 
 def cal_confusion_matrix(y_true, y_pred_no_thresh, thresh, img_path_list):
@@ -231,7 +282,7 @@ def cal_confusion_matrix(y_true, y_pred_no_thresh, thresh, img_path_list):
     print(false_p)
     print('false negative')
     print(false_n)
-    
+
 
 class STPM(pl.LightningModule):
     def __init__(self, hparams):
@@ -240,6 +291,7 @@ class STPM(pl.LightningModule):
         self.save_hyperparameters(hparams)
 
         self.init_features()
+
         def hook_t(module, input, output):
             self.features.append(output)
 
@@ -256,24 +308,25 @@ class STPM(pl.LightningModule):
         self.init_results_list()
 
         self.data_transforms = transforms.Compose([
-                        transforms.Resize((args.load_size, args.load_size), Image.ANTIALIAS),
-                        transforms.ToTensor(),
-                        transforms.CenterCrop(args.input_size),
-                        transforms.Normalize(mean=mean_train,
-                                            std=std_train)])
+            transforms.Resize((args.load_size, args.load_size), Image.ANTIALIAS),
+            transforms.ToTensor(),
+            transforms.CenterCrop(args.input_size),
+            transforms.Normalize(mean=mean_train,
+                                 std=std_train)])
         self.gt_transforms = transforms.Compose([
-                        transforms.Resize((args.load_size, args.load_size)),
-                        transforms.ToTensor(),
-                        transforms.CenterCrop(args.input_size)])
+            transforms.Resize((args.load_size, args.load_size)),
+            transforms.ToTensor(),
+            transforms.CenterCrop(args.input_size)])
 
-        self.inv_normalize = transforms.Normalize(mean=[-0.485/0.229, -0.456/0.224, -0.406/0.255], std=[1/0.229, 1/0.224, 1/0.255])
+        self.inv_normalize = transforms.Normalize(mean=[-0.485 / 0.229, -0.456 / 0.224, -0.406 / 0.255],
+                                                  std=[1 / 0.229, 1 / 0.224, 1 / 0.255])
 
     def init_results_list(self):
         self.gt_list_px_lvl = []
         self.pred_list_px_lvl = []
         self.gt_list_img_lvl = []
         self.pred_list_img_lvl = []
-        self.img_path_list = []        
+        self.img_path_list = []
 
     def init_features(self):
         self.features = []
@@ -287,10 +340,10 @@ class STPM(pl.LightningModule):
         if anomaly_map.shape != input_img.shape:
             anomaly_map = cv2.resize(anomaly_map, (input_img.shape[0], input_img.shape[1]))
         anomaly_map_norm = min_max_norm(anomaly_map)
-        anomaly_map_norm_hm = cvt2heatmap(anomaly_map_norm*255)
+        anomaly_map_norm_hm = cvt2heatmap(anomaly_map_norm * 255)
 
         # anomaly map on image
-        heatmap = cvt2heatmap(anomaly_map_norm*255)
+        heatmap = cvt2heatmap(anomaly_map_norm * 255)
         hm_on_img = heatmap_on_image(heatmap, input_img)
 
         # save images
@@ -300,28 +353,49 @@ class STPM(pl.LightningModule):
         cv2.imwrite(os.path.join(self.sample_path, f'{x_type}_{file_name}_gt.jpg'), gt_img)
 
     def train_dataloader(self):
-        image_datasets = MVTecDataset(root=os.path.join(args.dataset_path,args.category), transform=self.data_transforms, gt_transform=self.gt_transforms, phase='train')
-        train_loader = DataLoader(image_datasets, batch_size=args.batch_size, shuffle=True, num_workers=0) #, pin_memory=True)
+
+        if args.dataset == "MVTec":
+            image_datasets = MVTecDataset(root=os.path.join(args.dataset_path, args.category),
+                                          transform=self.data_transforms, gt_transform=self.gt_transforms,
+                                          phase='train')
+        elif args.dataset == "Retina":
+            image_datasets = Retina(root=os.path.join(args.dataset_path, args.category),
+                                    transform=self.data_transforms, phase='train')
+        else:
+            raise Exception("Invalid Dataset")
+
+        train_loader = DataLoader(image_datasets, batch_size=args.batch_size, shuffle=True,
+                                  num_workers=0)  # , pin_memory=True)
         return train_loader
 
     def test_dataloader(self):
-        test_datasets = MVTecDataset(root=os.path.join(args.dataset_path,args.category), transform=self.data_transforms, gt_transform=self.gt_transforms, phase='test')
-        test_loader = DataLoader(test_datasets, batch_size=1, shuffle=False, num_workers=0) #, pin_memory=True) # only work on batch_size=1, now.
+
+        if args.dataset == "MVTec":
+            test_datasets = MVTecDataset(root=os.path.join(args.dataset_path, args.category),
+                                         transform=self.data_transforms, gt_transform=self.gt_transforms, phase='test')
+        elif args.dataset == "Retina":
+            test_datasets = Retina(root=os.path.join(args.dataset_path, args.category),
+                                   transform=self.data_transforms, phase='test')
+        else:
+            raise Exception("Invalid Dataset")
+
+        test_loader = DataLoader(test_datasets, batch_size=1, shuffle=False,
+                                 num_workers=0)  # , pin_memory=True) # only work on batch_size=1, now.
         return test_loader
 
     def configure_optimizers(self):
         return None
 
     def on_train_start(self):
-        self.model.eval() # to stop running_var move (maybe not critical)
+        self.model.eval()  # to stop running_var move (maybe not critical)
         self.embedding_dir_path, self.sample_path, self.source_code_save_path = prep_dirs(self.logger.log_dir)
         self.embedding_list = []
-    
+
     def on_test_start(self):
         self.init_results_list()
         self.embedding_dir_path, self.sample_path, self.source_code_save_path = prep_dirs(self.logger.log_dir)
-        
-    def training_step(self, batch, batch_idx): # save locally aware patch features
+
+    def training_step(self, batch, batch_idx):  # save locally aware patch features
         x, _, _, file_name, _ = batch
         features = self(x)
         embeddings = []
@@ -331,22 +405,24 @@ class STPM(pl.LightningModule):
         embedding = embedding_concat(embeddings[0], embeddings[1])
         self.embedding_list.extend(reshape_embedding(np.array(embedding)))
 
-    def training_epoch_end(self, outputs): 
+    def training_epoch_end(self, outputs):
         total_embeddings = np.array(self.embedding_list)
         # Random projection
-        self.randomprojector = SparseRandomProjection(n_components='auto', eps=0.9) # 'auto' => Johnson-Lindenstrauss lemma
+        self.randomprojector = SparseRandomProjection(n_components='auto',
+                                                      eps=0.9)  # 'auto' => Johnson-Lindenstrauss lemma
         self.randomprojector.fit(total_embeddings)
         # Coreset Subsampling
-        selector = kCenterGreedy(total_embeddings,0,0)
-        selected_idx = selector.select_batch(model=self.randomprojector, already_selected=[], N=int(total_embeddings.shape[0]*args.coreset_sampling_ratio))
+        selector = kCenterGreedy(total_embeddings, 0, 0)
+        selected_idx = selector.select_batch(model=self.randomprojector, already_selected=[],
+                                             N=int(total_embeddings.shape[0] * args.coreset_sampling_ratio))
         self.embedding_coreset = total_embeddings[selected_idx]
-        
+
         print('initial embedding size : ', total_embeddings.shape)
         print('final embedding size : ', self.embedding_coreset.shape)
         with open(os.path.join(self.embedding_dir_path, 'embedding.pickle'), 'wb') as f:
             pickle.dump(self.embedding_coreset, f)
 
-    def test_step(self, batch, batch_idx): # Nearest Neighbour Search
+    def test_step(self, batch, batch_idx):  # Nearest Neighbour Search
         self.embedding_coreset = pickle.load(open(os.path.join(self.embedding_dir_path, 'embedding.pickle'), 'rb'))
         x, gt, label, file_name, x_type = batch
         # extract embedding
@@ -358,23 +434,23 @@ class STPM(pl.LightningModule):
         embedding_ = embedding_concat(embeddings[0], embeddings[1])
         embedding_test = np.array(reshape_embedding(np.array(embedding_)))
         # NN
-        #nbrs = NearestNeighbors(n_neighbors=args.n_neighbors, algorithm='ball_tree', metric='minkowski', p=2).fit(self.embedding_coreset)
-        #score_patches, _ = nbrs.kneighbors(embedding_test)
+        # nbrs = NearestNeighbors(n_neighbors=args.n_neighbors, algorithm='ball_tree', metric='minkowski', p=2).fit(self.embedding_coreset)
+        # score_patches, _ = nbrs.kneighbors(embedding_test)
         #
-        #Approximately 60x performance improvement
-        #tack time 1.9070019721984863 -> 0.03699636459350586
+        # Approximately 60x performance improvement
+        # tack time 1.9070019721984863 -> 0.03699636459350586
         knn = KNN(torch.from_numpy(self.embedding_coreset).cuda(), k=9)
         score_patches = knn(torch.from_numpy(embedding_test).cuda())[0].cpu().detach().numpy()
 
-        anomaly_map = score_patches[:,0].reshape((28,28))
-        N_b = score_patches[np.argmax(score_patches[:,0])]
-        w = (1 - (np.max(np.exp(N_b))/np.sum(np.exp(N_b))))
-        score = w*max(score_patches[:,0]) # Image-level score
-        
-        gt_np = gt.cpu().numpy()[0,0].astype(int)
+        anomaly_map = score_patches[:, 0].reshape((28, 28))
+        N_b = score_patches[np.argmax(score_patches[:, 0])]
+        w = (1 - (np.max(np.exp(N_b)) / np.sum(np.exp(N_b))))
+        score = w * max(score_patches[:, 0])  # Image-level score
+
+        gt_np = gt.cpu().numpy()[0, 0].astype(int)
         anomaly_map_resized = cv2.resize(anomaly_map, (args.input_size, args.input_size))
         anomaly_map_resized_blur = gaussian_filter(anomaly_map_resized, sigma=4)
-        
+
         self.gt_list_px_lvl.extend(gt_np.ravel())
         self.pred_list_px_lvl.extend(anomaly_map_resized_blur.ravel())
         self.gt_list_img_lvl.append(label.cpu().numpy()[0])
@@ -382,8 +458,8 @@ class STPM(pl.LightningModule):
         self.img_path_list.extend(file_name)
         # save images
         x = self.inv_normalize(x)
-        input_x = cv2.cvtColor(x.permute(0,2,3,1).cpu().numpy()[0]*255, cv2.COLOR_BGR2RGB)
-        self.save_anomaly_map(anomaly_map_resized_blur, input_x, gt_np*255, file_name[0], x_type[0])
+        input_x = cv2.cvtColor(x.permute(0, 2, 3, 1).cpu().numpy()[0] * 255, cv2.COLOR_BGR2RGB)
+        self.save_anomaly_map(anomaly_map_resized_blur, input_x, gt_np * 255, file_name[0], x_type[0])
 
     def test_epoch_end(self, outputs):
         print("Total pixel-level auc-roc score :")
@@ -409,33 +485,40 @@ class STPM(pl.LightningModule):
         # with open(args.project_root_path + r'/results.txt', 'a') as f:
         #     f.write(args.category + ' : ' + str(values) + '\n')
 
+
 def get_args():
     parser = argparse.ArgumentParser(description='ANOMALYDETECTION')
-    parser.add_argument('--phase', choices=['train','test'], default='train')
-    parser.add_argument('--dataset_path', default=r'/home/changwoo/hdd/datasets/mvtec_anomaly_detection') # 'D:\Dataset\mvtec_anomaly_detection')#
-    parser.add_argument('--category', default='carpet')
+    parser.add_argument('--phase', choices=['train', 'test'], default='train')
+    parser.add_argument('--dataset',
+                        default='Retina')
+    parser.add_argument('--dataset_path',
+                        default=r'/home/dani/Documents/Retian/dataset')  # 'D:\Dataset\mvtec_anomaly_detection')
+    parser.add_argument('--category', default='EyePACSCropped')
     parser.add_argument('--num_epochs', default=1)
     parser.add_argument('--batch_size', default=32)
-    parser.add_argument('--load_size', default=256) # 256
+    parser.add_argument('--load_size', default=256)  # 256
     parser.add_argument('--input_size', default=224)
     parser.add_argument('--coreset_sampling_ratio', default=0.001)
-    parser.add_argument('--project_root_path', default=r'/home/changwoo/hdd/project_results/patchcore/test') # 'D:\Project_Train_Results\mvtec_anomaly_detection\210624\test') #
+    parser.add_argument('--project_root_path',
+                        default=r'./project_results')  # 'D:\Project_Train_Results\mvtec_anomaly_detection\210624\test') #
     parser.add_argument('--save_src_code', default=True)
     parser.add_argument('--save_anomaly_map', default=True)
     parser.add_argument('--n_neighbors', type=int, default=9)
     args = parser.parse_args()
     return args
 
+
 if __name__ == '__main__':
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = get_args()
-    
-    trainer = pl.Trainer.from_argparse_args(args, default_root_dir=os.path.join(args.project_root_path, args.category), max_epochs=args.num_epochs, gpus=1) #, check_val_every_n_epoch=args.val_freq,  num_sanity_val_steps=0) # ,fast_dev_run=True)
+
+    trainer = pl.Trainer.from_argparse_args(args, default_root_dir=os.path.join(args.project_root_path, args.category),
+                                            max_epochs=args.num_epochs,
+                                            gpus=1)  # , check_val_every_n_epoch=args.val_freq,  num_sanity_val_steps=0) # ,fast_dev_run=True)
     model = STPM(hparams=args)
     if args.phase == 'train':
         trainer.fit(model)
         trainer.test(model)
     elif args.phase == 'test':
         trainer.test(model)
-
