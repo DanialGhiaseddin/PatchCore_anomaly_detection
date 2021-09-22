@@ -162,7 +162,10 @@ class Retina(Dataset):
             img_paths = glob.glob(os.path.join(self.img_path, defect_type) + "/*.jpeg")
             img_tot_paths.extend(img_paths)
             gt_tot_paths.extend([0] * len(img_paths))
-            tot_labels.extend([int(defect_type)] * len(img_paths))
+            if int(defect_type) == 0:
+                tot_labels.extend([0] * len(img_paths))
+            else:
+                tot_labels.extend([1] * len(img_paths))
             tot_types.extend([defect_type] * len(img_paths))
 
         assert len(img_tot_paths) == len(gt_tot_paths), "Something wrong with test and ground truth pair!"
