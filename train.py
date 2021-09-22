@@ -298,6 +298,7 @@ class STPM(pl.LightningModule):
         def hook_t(module, input, output):
             self.features.append(output)
 
+        torch.hub._validate_not_a_forked_repo = lambda a, b, c: True
         self.model = torch.hub.load('pytorch/vision:v0.9.0', 'wide_resnet50_2', pretrained=True)
 
         for param in self.model.parameters():
