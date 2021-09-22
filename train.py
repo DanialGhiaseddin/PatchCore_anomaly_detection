@@ -365,7 +365,7 @@ class STPM(pl.LightningModule):
             raise Exception("Invalid Dataset")
 
         train_loader = DataLoader(image_datasets, batch_size=args.batch_size, shuffle=True,
-                                  num_workers=0)  # , pin_memory=True)
+                                  num_workers=8)  # , pin_memory=True)
         return train_loader
 
     def test_dataloader(self):
@@ -380,7 +380,7 @@ class STPM(pl.LightningModule):
             raise Exception("Invalid Dataset")
 
         test_loader = DataLoader(test_datasets, batch_size=1, shuffle=False,
-                                 num_workers=0)  # , pin_memory=True) # only work on batch_size=1, now.
+                                 num_workers=8)  # , pin_memory=True) # only work on batch_size=1, now.
         return test_loader
 
     def configure_optimizers(self):
@@ -404,6 +404,7 @@ class STPM(pl.LightningModule):
             embeddings.append(m(feature))
         embedding = embedding_concat(embeddings[0], embeddings[1])
         self.embedding_list.extend(reshape_embedding(np.array(embedding)))
+        print("################## Current Embedding List", len(self.embedding_list))
 
     def training_epoch_end(self, outputs):
         total_embeddings = np.array(self.embedding_list)
@@ -492,15 +493,15 @@ def get_args():
     parser.add_argument('--dataset',
                         default='Retina')
     parser.add_argument('--dataset_path',
-                        default=r'/home/dani/Documents/Retian/dataset')  # 'D:\Dataset\mvtec_anomaly_detection')
-    parser.add_argument('--category', default='EyePACSCropped')
+                        default=r'/content/datasets')
+    parser.add_argument('--category', default='diabetic_retinopathy_detection')
     parser.add_argument('--num_epochs', default=1)
     parser.add_argument('--batch_size', default=32)
     parser.add_argument('--load_size', default=256)  # 256
     parser.add_argument('--input_size', default=224)
     parser.add_argument('--coreset_sampling_ratio', default=0.001)
     parser.add_argument('--project_root_path',
-                        default=r'./project_results')  # 'D:\Project_Train_Results\mvtec_anomaly_detection\210624\test') #
+                        default=r'./project_results')
     parser.add_argument('--save_src_code', default=True)
     parser.add_argument('--save_anomaly_map', default=True)
     parser.add_argument('--n_neighbors', type=int, default=9)
@@ -515,7 +516,7 @@ if __name__ == '__main__':
 
     trainer = pl.Trainer.from_argparse_args(args, default_root_dir=os.path.join(args.project_root_path, args.category),
                                             max_epochs=args.num_epochs,
-                                            gpus=1)  # , check_val_every_n_epoch=args.val_freq,  num_sanity_val_steps=0) # ,fast_dev_run=True)
+                                            gpus=1)
     model = STPM(hparams=args)
     if args.phase == 'train':
         trainer.fit(model)
