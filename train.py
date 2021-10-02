@@ -468,14 +468,14 @@ class STPM(pl.LightningModule):
 
     def test_epoch_end(self, outputs):
         print("Total pixel-level auc-roc score :")
-        pixel_auc = roc_auc_score(self.gt_list_px_lvl, self.pred_list_px_lvl)
-        print(pixel_auc)
+        # pixel_auc = roc_auc_score(self.gt_list_px_lvl, self.pred_list_px_lvl)
+        # print(pixel_auc)
         print("Total image-level auc-roc score :")
         img_auc = roc_auc_score(self.gt_list_img_lvl, self.pred_list_img_lvl)
         print(img_auc)
         print('test_epoch_end')
-        values = {'pixel_auc': pixel_auc, 'img_auc': img_auc}
-        self.log_dict(values)
+        # values = {'pixel_auc': pixel_auc, 'img_auc': img_auc}
+        # self.log_dict(values)
         # anomaly_list = []
         # normal_list = []
         # for i in range(len(self.gt_list_img_lvl)):

@@ -12,6 +12,7 @@ embeddings/
 build/
 develop-eggs/
 .idea/
+datasets/
 dist/
 downloads/
 eggs/
